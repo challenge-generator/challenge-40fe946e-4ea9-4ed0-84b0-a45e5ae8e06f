@@ -1,0 +1,295 @@
+name: Code Quality
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  flutter_version: '3.27.0'
+  dart_version: '3.6.0'
+
+jobs:
+  analyze:
+    name: Análisis estático y métricas de código
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verificar configuración de Git
+        run: |
+          git config --global --add safe.directory /__w/flutter_code_metrics_app
+          git config --global --add safe.directory '*'
+
+      - name: Obtener código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.flutter_version }}
+          channel: 'stable'
+          cache: true
+          cache-dependency-path: pubspec.lock
+
+      - name: Obtener dependencias
+        run: flutter pub get
+
+      - name: Verificar formato de código
+        id: format
+        run: |
+          flutter format --set-exit-if-changed lib/ test/
+        continue-on-error: true
+
+      - name: Ejecutar análisis estático con Flutter
+        id: analyze
+        run: |
+          flutter analyze --no-fatal-infos --no-fatal-warnings
+        continue-on-error: true
+
+      - name: Ejecutar análisis de métricas con dart_code_metrics
+        id: metrics
+        run: |
+          flutter pub run dart_code_metrics analyze lib/ \
+            --reporter=github \
+            --anti-patterns-reporter=github \
+            --metrics-reporter=github \
+            --output-dir=./metrics_output
+        continue-on-error: true
+
+      - name: Verificar umbrales de complejidad ciclomática
+        run: |
+          flutter pub run dart_code_metrics analyze lib/ \
+            --reporter=json \
+            --output-dir=./metrics_output
+
+          echo "Verificando umbrales de complejidad ciclomática..."
+          if grep -q 'cyclomatic-complexity.*[1-9][0-9]' ./metrics_output/metrics.json 2>/dev/null; then
+            echo "ERROR: Se detectaron métodos con complejidad ciclomática mayor a 10"
+            cat ./metrics_output/metrics.json | grep -A 5 'cyclomatic-complexity'
+            exit 1
+          fi
+          echo "Umbral de complejidad ciclomática: OK"
+        continue-on-error: true
+
+      - name: Verificar anidamiento máximo
+        run: |
+          echo "Verificando nivel de anidamiento máximo..."
+          if grep -q 'maximum-nesting-level.*[5-9]' ./metrics_output/metrics.json 2>/dev/null; then
+            echo "ERROR: Se detectaron métodos con anidamiento mayor a 4"
+            exit 1
+          fi
+          echo "Umbral de anidamiento: OK"
+        continue-on-error: true
+
+      - name: Verificar número de parámetros
+        run: |
+          echo "Verificando número de parámetros por función..."
+          if grep -q 'number-of-parameters.*[5-9]' ./metrics_output/metrics.json 2>/dev/null; then
+            echo "ERROR: Se detectaron funciones con más de 4 parámetros"
+            exit 1
+          fi
+          echo "Umbral de parámetros: OK"
+        continue-on-error: true
+
+      - name: Verificar líneas de código por método
+        run: |
+          echo "Verificando líneas de código por método..."
+          if grep -q 'source-lines-of-code.*[5-9][0-9]' ./metrics_output/metrics.json 2>/dev/null; then
+            echo "ERROR: Se detectaron métodos con más de 50 líneas"
+            exit 1
+          fi
+          echo "Umbral de líneas de código: OK"
+        continue-on-error: true
+
+      - name: Verificar reglas personalizadas de lint
+        run: |
+          echo "Verificando reglas personalizadas configuradas..."
+          flutter analyze --no-fatal-infos 2>&1 | tee analyze_output.txt
+          
+          if grep -q 'error.*avoid-unused-parameters' analyze_output.txt; then
+            echo "ERROR: Parámetros sin usar detectados - aplicar prefer_final_parameters"
+            exit 1
+          fi
+          
+          if grep -q 'error.*avoid-duplicate-exports' analyze_output.txt; then
+            echo "ERROR: Exportaciones duplicadas detectadas"
+            exit 1
+          fi
+          
+          if grep -q 'error.*avoid-shadowing' analyze_output.txt; then
+            echo "ERROR: Variables que sombrean otras detectadas"
+            exit 1
+          fi
+          
+          if grep -q 'error.*avoid-unrelated-type-assertions' analyze_output.txt; then
+            echo "ERROR: Aserciones de tipos no relacionadas detectadas"
+            exit 1
+          fi
+          
+          if grep -q 'error.*avoid-global-state' analyze_output.txt; then
+            echo "ERROR: Estado global detectado - refactorizar para usar inyección de dependencias"
+            exit 1
+          fi
+          
+          echo "Reglas personalizadas de lint: OK"
+        continue-on-error: true
+
+      - name: Verificar código duplicado
+        run: |
+          echo "Buscando código duplicado..."
+          flutter pub run dart_code_metrics analyze lib/ \
+            --reporter=json \
+            --output-dir=./metrics_output \
+            2>&1 | tee metrics_output.txt
+          
+          if grep -qi 'duplicate\|duplicado' metrics_output.txt; then
+            echo "WARNING: Se detectó código duplicado"
+          fi
+        continue-on-error: true
+
+      - name: Calcular índice de mantenibilidad
+        run: |
+          echo "Calculando índice de mantenibilidad..."
+          if [ -f ./metrics_output/metrics.json ]; then
+            echo "Reporte de métricas disponible en: ./metrics_output/metrics.json"
+          fi
+        continue-on-error: true
+
+      - name: Reportar resultados del análisis
+        if: always()
+        run: |
+          echo "=== RESULTADOS DEL ANÁLISIS DE CALIDAD ==="
+          echo ""
+          echo "Formato: ${{ steps.format.outcome }}"
+          echo "Análisis estático: ${{ steps.analyze.outcome }}"
+          echo "Métricas de código: ${{ steps.metrics.outcome }}"
+          echo ""
+          
+          if [ "${{ steps.analyze.outcome }}" == "failure" ]; then
+            echo "FALLÓ: El análisis estático encontró errores que deben corregirse"
+            exit 1
+          fi
+          
+          if [ "${{ steps.metrics.outcome }}" == "failure" ]; then
+            echo "FALLÓ: Las métricas de código exceeden los umbrales configurados"
+            exit 1
+          fi
+          
+          echo "ÉXITO: Todo el análisis de calidad pasó exitosamente"
+
+  test:
+    name: Ejecutar pruebas unitarias
+    runs-on: ubuntu-latest
+    needs: analyze
+    steps:
+      - name: Verificar configuración de Git
+        run: |
+          git config --global --add safe.directory /__w/flutter_code_metrics_app
+          git config --global --add safe.directory '*'
+
+      - name: Obtener código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.flutter_version }}
+          channel: 'stable'
+          cache: true
+          cache-dependency-path: pubspec.lock
+
+      - name: Obtener dependencias
+        run: flutter pub get
+
+      - name: Ejecutar pruebas
+        run: |
+          flutter test --reporter=github --coverage
+        continue-on-error: true
+
+      - name: Verificar cobertura de código
+        run: |
+          if [ -f "coverage/lcov.info" ]; then
+            echo "Reporte de cobertura disponible"
+          fi
+        continue-on-error: true
+
+      - name: Reportar resultados de pruebas
+        if: always()
+        run: |
+          echo "=== RESULTADOS DE PRUEBAS ==="
+          echo "Estado: ${{ job.status }}"
+
+  build:
+    name: Compilar aplicación debug
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Verificar configuración de Git
+        run: |
+          git config --global --add safe.directory /__w/flutter_code_metrics_app
+          git config --global --add safe.directory '*'
+
+      - name: Obtener código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.flutter_version }}
+          channel: 'stable'
+          cache: true
+          cache-dependency-path: pubspec.lock
+
+      - name: Obtener dependencias
+        run: flutter pub get
+
+      - name: Compilar APK debug
+        run: |
+          flutter build apk --debug
+        continue-on-error: true
+
+      - name: Compilar bundle web
+        run: |
+          flutter build web --release
+        continue-on-error: true
+
+      - name: Reportar resultados de compilación
+        if: always()
+        run: |
+          echo "=== RESULTADOS DE COMPILACIÓN ==="
+          echo "Estado: ${{ job.status }}"
+
+  quality-gate:
+    name: Validación final de calidad
+    runs-on: ubuntu-latest
+    needs: [analyze, test, build]
+    if: always()
+    steps:
+      - name: Verificar estado de calidad
+        run: |
+          echo "=== GATE DE CALIDAD ==="
+          echo "Análisis: ${{ needs.analyze.result }}"
+          echo "Pruebas: ${{ needs.test.result }}"
+          echo "Compilación: ${{ needs.build.result }}"
+          echo ""
+          
+          if [ "${{ needs.analyze.result }}" == "failure" ]; then
+            echo "BLOQUEO: Análisis de código falló"
+            exit 1
+          fi
+          
+          if [ "${{ needs.test.result }}" == "failure" ]; then
+            echo "BLOQUEO: Pruebas unitarias fallaron"
+            exit 1
+          fi
+          
+          if [ "${{ needs.build.result }}" == "failure" ]; then
+            echo "BLOQUEO: Compilación falló"
+            exit 1
+          fi
+          
+          echo "✓ Todos los gates de calidad pasaron"

@@ -1,0 +1,158 @@
+{
+  "version": "1.0.0",
+  "description": "Configuración de umbrales máximos permitidos para métricas de calidad de código Flutter",
+  "project": "flutter_code_metrics_app",
+  "thresholds": {
+    "cyclomatic-complexity": {
+      "maxValue": 10,
+      "severity": "error",
+      "description": "Complejidad ciclomática máxima por método. Valores mayores a 10 indican métodos difíciles de probar y mantener.",
+      "enabled": true
+    },
+    "maximum-nesting-level": {
+      "maxValue": 4,
+      "severity": "error",
+      "description": "Nivel máximo de anidamiento permitido. Más de 4 niveles indica código difícil de leer.",
+      "enabled": true
+    },
+    "number-of-parameters": {
+      "maxValue": 4,
+      "severity": "warning",
+      "description": "Número máximo de parámetros por función. Funciones con más de 4 parámetros son difíciles de invocar.",
+      "enabled": true
+    },
+    "source-lines-of-code": {
+      "maxValue": 50,
+      "severity": "warning",
+      "description": "Líneas de código source máximo por método. Métodos muy largos violan el principio de responsabilidad única.",
+      "enabled": true
+    },
+    "maintainability-index": {
+      "minValue": 65,
+      "severity": "error",
+      "description": "Índice de mantenibilidad mínimo. Valores menores a 65 indican código difícil de mantener.",
+      "enabled": true,
+      "inverted": true
+    },
+    "technical-debt": {
+      "maxValue": 30,
+      "severity": "warning",
+      "description": "Deuda técnica máxima en minutos. Más de 30 minutos indica acumulación significativa de deuda.",
+      "enabled": true,
+      "unit": "minutes"
+    },
+    "lines-of-code": {
+      "maxValue": 500,
+      "severity": "warning",
+      "description": "Líneas de código máximo por archivo. Archivos muy grandes son difíciles de mantener.",
+      "enabled": true
+    },
+    "number-of-functions": {
+      "maxValue": 20,
+      "severity": "warning",
+      "description": "Número máximo de funciones por clase. Clases con más de 20 funciones violan el principio SRP.",
+      "enabled": true
+    },
+    "coupling": {
+      "maxValue": 15,
+      "severity": "warning",
+      "description": "Acoplamiento máximo entre módulos. Alto acoplamiento dificulta el mantenimiento.",
+      "enabled": true
+    },
+    "cohesion": {
+      "minValue": 70,
+      "severity": "info",
+      "description": "Cohesión mínima esperada por clase. Baja cohesión indica que la clase tiene responsabilidades mezcladas.",
+      "enabled": true,
+      "inverted": true
+    }
+  },
+  "antiPatterns": {
+    "long-method": {
+      "enabled": true,
+      "severity": "error",
+      "description": "Detecta métodos que exceden el umbral de líneas de código"
+    },
+    "long-parameter-list": {
+      "enabled": true,
+      "severity": "warning",
+      "description": "Detecta funciones con más de 4 parámetros"
+    },
+    "complex-conditionals": {
+      "enabled": true,
+      "severity": "warning",
+      "description": "Detecta condicionales anidados que dificultan el flujo de lectura"
+    },
+    "god-class": {
+      "enabled": true,
+      "severity": "error",
+      "description": "Detecta clases con demasiadas responsabilidades"
+    },
+    "feature-envy": {
+      "enabled": true,
+      "severity": "info",
+      "description": "Detecta código que accede excesivamente a datos de otros objetos"
+    }
+  },
+  "rules": {
+    "avoid-unused-parameters": {
+      "severity": "error",
+      "enabled": true
+    },
+    "avoid-nested-conditional-expressions": {
+      "severity": "error",
+      "enabled": true
+    },
+    "avoid-global-state": {
+      "severity": "error",
+      "enabled": true
+    },
+    "avoid-shadowing": {
+      "severity": "warning",
+      "enabled": true
+    },
+    "avoid-unnecessary-type-assertions": {
+      "severity": "warning",
+      "enabled": true
+    },
+    "avoid-dynamic": {
+      "severity": "warning",
+      "enabled": true
+    },
+    "avoid-late-keyword": {
+      "severity": "warning",
+      "enabled": true
+    },
+    "prefer-single-widget-per-file": {
+      "severity": "warning",
+      "enabled": true
+    },
+    "prefer-extracting-callbacks": {
+      "severity": "warning",
+      "enabled": true
+    },
+    "avoid-returning-widgets": {
+      "severity": "warning",
+      "enabled": true
+    }
+  },
+  "ciCdIntegration": {
+    "failOnError": true,
+    "failOnWarning": false,
+    "generateHtmlReport": true,
+    "generateJsonReport": true,
+    "commentOnPullRequest": true,
+    "includePaths": ["lib/**"],
+    "excludePaths": ["test/**", "**.g.dart", "**.freezed.dart"]
+  },
+  "notifications": {
+    "slack": {
+      "enabled": false,
+      "webhookUrl": ""
+    },
+    "email": {
+      "enabled": false,
+      "recipients": []
+    }
+  }
+}
